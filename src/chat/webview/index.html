@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; style-src {{cspSource}} 'unsafe-inline'; script-src 'nonce-{{nonce}}';">
+    <title>Kiro Chat</title>
+    <link rel="stylesheet" href="{{stylesUri}}">
+</head>
+
+<body>
+    <div id="chat-root">
+        <div id="header" class="header">
+            <select id="model-selector" class="model-selector" title="Select model">
+                <option value="auto">Auto</option>
+            </select>
+        </div>
+        <div id="messages" class="messages"></div>
+        <div id="loading-indicator" class="loading-indicator hidden">
+            <span class="loading-text">⏳ Thinking</span>
+            <span class="loading-dot"></span>
+            <span class="loading-dot"></span>
+            <span class="loading-dot"></span>
+        </div>
+        <div id="spec-phase-bar" class="spec-phase-bar hidden"></div>
+        <div class="input-area">
+            <textarea id="message-input" class="message-input" placeholder="Ask Kiro something..." rows="1"></textarea>
+            <button id="send-btn" class="send-btn" title="Send message">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M1 1.5L15 8L1 14.5V9.5L10 8L1 6.5V1.5Z" />
+                </svg>
+            </button>
+        </div>
+    </div>
+    <script nonce="{{nonce}}" src="{{scriptUri}}"></script>
+</body>
+
+</html>
