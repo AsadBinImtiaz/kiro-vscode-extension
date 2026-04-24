@@ -2,6 +2,12 @@
 
 All notable changes to the Kiro VS Code Extension will be documented in this file.
 
+## [0.1.1] — 2025-04-24
+
+### Fixed
+
+- Editor context not sent when the chat panel has focus. The extension now tracks the last active text editor so file context is always included in prompts, even when the webview input is focused.
+
 ## [0.1.0] — 2025-04-23
 
 ### Added

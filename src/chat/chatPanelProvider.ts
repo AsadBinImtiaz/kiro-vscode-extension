@@ -23,11 +23,29 @@ export class ChatPanelProvider implements vscode.Disposable {
     private _lastFailedMessage: string | null = null;
     private readonly _disposables: vscode.Disposable[] = [];
 
+    /**
+     * Tracks the last known text editor so we can capture context even when
+     * the webview panel has focus (which causes activeTextEditor to be null).
+     */
+    private _lastActiveTextEditor: vscode.TextEditor | undefined;
+
     constructor(
         private readonly _extensionUri: vscode.Uri,
         private readonly _cliManager: CliManager,
         _contextProvider: WorkspaceContextProvider
-    ) { }
+    ) {
+        // Seed with the current active editor
+        this._lastActiveTextEditor = vscode.window.activeTextEditor;
+
+        // Track editor changes — update our snapshot whenever a real text editor gains focus
+        this._disposables.push(
+            vscode.window.onDidChangeActiveTextEditor((editor) => {
+                if (editor) {
+                    this._lastActiveTextEditor = editor;
+                }
+            })
+        );
+    }
 
     /**
      * Opens or reveals the chat panel.
@@ -217,13 +235,15 @@ export class ChatPanelProvider implements vscode.Disposable {
 
     /**
      * Builds a prompt enriched with active file context and selected text.
-     * If the user has text selected, includes the selection.
-     * Otherwise includes the active file path (and content if small enough).
-     * If no file is open, returns the prompt as-is.
+     *
+     * Uses _lastActiveTextEditor instead of vscode.window.activeTextEditor
+     * because when the user types in the webview, the webview has focus and
+     * activeTextEditor returns null. We track the last real text editor
+     * separately to avoid this.
      */
     private _buildContextEnrichedPrompt(userText: string): string {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor) {
+        const editor = this._lastActiveTextEditor;
+        if (!editor || editor.document.isClosed) {
             return userText;
         }
 
