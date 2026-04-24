@@ -34,6 +34,10 @@ body {
     background-color: var(--vscode-sideBar-background, #252526);
 }
 
+.header-spacer {
+    flex: 1;
+}
+
 .model-selector {
     font-family: var(--vscode-font-family, sans-serif);
     font-size: calc(var(--vscode-font-size, 13px) - 1px);
@@ -49,6 +53,79 @@ body {
 
 .model-selector:focus {
     border-color: var(--vscode-focusBorder, #007fd4);
+}
+
+/* ---- Context Usage Indicator ---- */
+
+.context-usage {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.context-usage svg {
+    display: block;
+}
+
+.context-tooltip {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 6px;
+    padding: 8px 12px;
+    background-color: var(--vscode-editorHoverWidget-background, #2d2d2d);
+    border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--vscode-editorHoverWidget-foreground, #ccc);
+    white-space: nowrap;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.context-usage:hover .context-tooltip {
+    display: block;
+}
+
+.context-tooltip-total {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+    font-weight: 600;
+}
+
+/* ---- Header Icon Buttons (Clear Chat, Start Spec) ---- */
+
+.clear-chat-btn,
+.header-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: none;
+    color: var(--vscode-foreground, #ccc);
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.7;
+    transition: opacity 0.15s, background-color 0.15s;
+    flex-shrink: 0;
+}
+
+.clear-chat-btn:hover,
+.header-icon-btn:hover {
+    opacity: 1;
+    background-color: var(--vscode-toolbar-hoverBackground, rgba(90, 93, 94, 0.31));
 }
 
 /* ---- Message History ---- */
@@ -285,31 +362,109 @@ body {
     }
 }
 
-/* ---- Spec Phase Bar ---- */
+/* ---- Spec Phase Bar (Enhanced) ---- */
 
 .spec-phase-bar {
     display: flex;
+    align-items: center;
     gap: 8px;
     padding: 8px 16px;
     background-color: var(--vscode-sideBar-background, #252526);
     border-top: 1px solid var(--vscode-panel-border, #444);
     font-size: 12px;
+    flex-wrap: wrap;
 }
 
 .spec-phase-bar.hidden {
     display: none;
 }
 
+.spec-phases-list {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex: 1;
+}
+
 .spec-phase {
     padding: 3px 10px;
     border-radius: 10px;
-    background-color: var(--vscode-badge-background, #4d4d4d);
-    color: var(--vscode-badge-foreground, #ccc);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.spec-phase.completed {
+    background-color: var(--vscode-testing-iconPassed, #73c991);
+    color: #fff;
 }
 
 .spec-phase.active {
     background-color: var(--vscode-button-background, #0e639c);
     color: var(--vscode-button-foreground, #fff);
+}
+
+.spec-phase.future {
+    background-color: var(--vscode-badge-background, #4d4d4d);
+    color: var(--vscode-badge-foreground, #ccc);
+}
+
+.spec-phase-description {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground, #999);
+    margin-left: 4px;
+}
+
+.spec-phase-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.spec-accept-btn {
+    padding: 3px 10px;
+    font-size: 11px;
+    color: var(--vscode-button-foreground, #fff);
+    background-color: var(--vscode-button-background, #0e639c);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.spec-accept-btn:hover {
+    background-color: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+.spec-save-only-btn {
+    padding: 3px 10px;
+    font-size: 11px;
+    color: var(--vscode-foreground, #ccc);
+    background-color: var(--vscode-button-secondaryBackground, #3a3d41);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.spec-save-only-btn:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
+
+.spec-cancel-btn {
+    padding: 3px 8px;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground, #999);
+    background: none;
+    border: 1px solid var(--vscode-input-border, #3c3c3c);
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.spec-cancel-btn:hover {
+    color: var(--vscode-foreground, #ccc);
+    border-color: var(--vscode-foreground, #ccc);
 }
 
 /* ---- Input Area ---- */

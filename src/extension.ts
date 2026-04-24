@@ -67,6 +67,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // 6. Create SpecWorkflowManager
     const specWorkflowManager = new SpecWorkflowManager(cliManager, chatPanelProvider);
 
+    // Wire up spec workflow callbacks
+    chatPanelProvider.setSpecCallbacks(
+        (content) => specWorkflowManager.capturePhaseContent(content),
+        () => specWorkflowManager.advancePhase(),
+        () => specWorkflowManager.saveCurrentPhase(),
+        () => specWorkflowManager.cancelWorkflow()
+    );
+
     // 7. Create CommandRegistry and register commands
     const commandRegistry = new CommandRegistry(cliManager, chatPanelProvider, specWorkflowManager);
 

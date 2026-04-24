@@ -2,6 +2,30 @@
 
 All notable changes to the Kiro VS Code Extension will be documented in this file.
 
+## [0.1.3] — 2025-04-24
+
+### Added
+
+- Enhanced spec workflow with input dialogs for name/description, collision detection, and .bak backup
+- Interactive spec phase bar with 💾 Save, ✅ Save & Continue, and ✕ Cancel buttons
+- Phase prompts instruct AI not to create files — content captured and saved by the extension
+- 📋 Start Spec button in chat header for quick access
+- Context usage indicator (circular ring) showing model context window consumption
+- 🗑 Clear chat button in header
+- Auto-reconnect with exponential backoff (3 attempts: 2s, 4s, 8s) on unexpected CLI exit
+- Custom extension icon
+
+### Fixed
+
+- Spec prompts no longer prepend editor context (dedicated handleSpecPrompt method)
+- Chat panel auto-opens when starting a spec workflow
+- Spec content properly captured from streaming responses and saved to .kiro/specs/
+
+### Changed
+
+- Updated extension description to clarify it's a UI wrapper for the Kiro CLI
+- Rewrote README with prominent prerequisites section and troubleshooting guide
+
 ## [0.1.2] — 2025-04-24
 
 ### Changed

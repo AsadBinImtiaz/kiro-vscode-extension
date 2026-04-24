@@ -16,6 +16,24 @@
             <select id="model-selector" class="model-selector" title="Select model">
                 <option value="auto">Auto</option>
             </select>
+            <div id="context-usage" class="context-usage" title="Context usage: 0%">
+                <svg width="18" height="18" viewBox="0 0 18 18">
+                    <circle cx="9" cy="9" r="7" fill="none" stroke="var(--vscode-editorWidget-border, #555)"
+                        stroke-width="2" />
+                    <circle id="context-ring" cx="9" cy="9" r="7" fill="none" stroke="#73c991" stroke-width="2"
+                        stroke-dasharray="0 44" stroke-dashoffset="11" stroke-linecap="round"
+                        transform="rotate(-90 9 9)" />
+                </svg>
+                <div id="context-tooltip" class="context-tooltip">
+                    <div>Conversation: <span id="ctx-conversation">0</span>%</div>
+                    <div>MCP Tools: <span id="ctx-mcp">0</span>%</div>
+                    <div>Steering: <span id="ctx-steering">0</span>%</div>
+                    <div class="context-tooltip-total">Total: <span id="ctx-total">0</span>%</div>
+                </div>
+            </div>
+            <div class="header-spacer"></div>
+            <button id="start-spec-btn" class="header-icon-btn" title="Start Spec">📋</button>
+            <button id="clear-chat-btn" class="clear-chat-btn" title="Clear chat">🗑</button>
         </div>
         <div id="messages" class="messages"></div>
         <div id="loading-indicator" class="loading-indicator hidden">

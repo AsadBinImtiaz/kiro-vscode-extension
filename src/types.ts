@@ -50,6 +50,17 @@ export interface AcpError {
 }
 
 // ---------------------------------------------------------------------------
+// Context Usage Types
+// ---------------------------------------------------------------------------
+
+export interface ContextUsage {
+    conversation: number;
+    mcpTools: number;
+    steeringFiles: number;
+    total: number;
+}
+
+// ---------------------------------------------------------------------------
 // Spec Types (Requirement 5.2)
 // ---------------------------------------------------------------------------
 
@@ -106,7 +117,9 @@ export type ExtToWebviewMessage =
     | { type: 'specPhase'; phase: SpecPhase; phaseIndex: number }
     | { type: 'systemMessage'; message: string }
     | { type: 'configOptions'; options: ConfigOption[] }
-    | { type: 'clearChat' };
+    | { type: 'clearChat' }
+    | { type: 'contextUsage'; usage: ContextUsage }
+    | { type: 'specPhaseBar'; phase: SpecPhase; phaseIndex: number; phases: string[] };
 
 /** Webview → Extension Host */
 export type WebviewToExtMessage =
@@ -114,7 +127,12 @@ export type WebviewToExtMessage =
     | { type: 'selectFiles'; paths: string[] }
     | { type: 'advanceSpec'; phaseOutput: string }
     | { type: 'retry' }
-    | { type: 'selectModel'; configId: string; value: string };
+    | { type: 'selectModel'; configId: string; value: string }
+    | { type: 'specAccept' }
+    | { type: 'specSave' }
+    | { type: 'specCancel' }
+    | { type: 'startSpec' }
+    | { type: 'clearChat' };
 
 // ---------------------------------------------------------------------------
 // Config Option Types (Requirement 12)

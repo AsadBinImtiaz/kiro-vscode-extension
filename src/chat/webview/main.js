@@ -19,6 +19,9 @@
     const inputEl = document.getElementById('message-input');
     const sendBtn = document.getElementById('send-btn');
     const modelSelector = document.getElementById('model-selector');
+    const clearChatBtn = document.getElementById('clear-chat-btn');
+    const contextRing = document.getElementById('context-ring');
+    const contextUsageEl = document.getElementById('context-usage');
 
     /** @type {HTMLDivElement|null} Current assistant message element being streamed into */
     let currentAssistantMsg = null;
@@ -72,6 +75,21 @@
         vscode.postMessage({ type: 'retry' });
     }
 
+    // ---- Clear Chat Button ----
+    if (clearChatBtn) {
+        clearChatBtn.addEventListener('click', function () {
+            vscode.postMessage({ type: 'clearChat' });
+        });
+    }
+
+    // ---- Start Spec Button ----
+    var startSpecBtn = document.getElementById('start-spec-btn');
+    if (startSpecBtn) {
+        startSpecBtn.addEventListener('click', function () {
+            vscode.postMessage({ type: 'startSpec' });
+        });
+    }
+
     // ---- Incoming Messages ----
 
     window.addEventListener('message', function (event) {
@@ -92,6 +110,9 @@
             case 'specPhase':
                 handleSpecPhase(msg.phase, msg.phaseIndex);
                 break;
+            case 'specPhaseBar':
+                handleSpecPhaseBar(msg.phase, msg.phaseIndex, msg.phases);
+                break;
             case 'systemMessage':
                 handleSystemMessage(msg.message);
                 break;
@@ -100,6 +121,9 @@
                 break;
             case 'clearChat':
                 handleClearChat();
+                break;
+            case 'contextUsage':
+                handleContextUsage(msg.usage);
                 break;
         }
     });
@@ -210,7 +234,7 @@
     }
 
     /**
-     * Displays the spec phase indicator bar.
+     * Displays the spec phase indicator bar (legacy simple version).
      * @param {string} phase
      * @param {number} phaseIndex
      */
@@ -226,6 +250,80 @@
                 return '<span class="' + cls + '">' + escapeHtml(p) + '</span>';
             })
             .join('');
+    }
+
+    /**
+     * Renders the interactive spec phase bar with badges and action buttons.
+     * Green badge for completed phases, blue for current, grey for future.
+     * @param {string} phase - Current phase name
+     * @param {number} phaseIndex - Current phase index
+     * @param {string[]} phases - All phase names
+     */
+    function handleSpecPhaseBar(phase, phaseIndex, phases) {
+        if (!specPhaseBar) {
+            return;
+        }
+
+        // Hide if no phases (workflow ended)
+        if (!phases || phases.length === 0 || phaseIndex < 0) {
+            specPhaseBar.classList.add('hidden');
+            specPhaseBar.innerHTML = '';
+            return;
+        }
+
+        specPhaseBar.classList.remove('hidden');
+
+        var isLastPhase = phaseIndex === phases.length - 1;
+
+        // Build phase badges
+        var badgesHtml = '<div class="spec-phases-list">';
+        for (var i = 0; i < phases.length; i++) {
+            var badgeClass = 'spec-phase';
+            if (i < phaseIndex) {
+                badgeClass += ' completed';
+            } else if (i === phaseIndex) {
+                badgeClass += ' active';
+            } else {
+                badgeClass += ' future';
+            }
+            badgesHtml += '<span class="' + badgeClass + '">' + escapeHtml(phases[i]) + '</span>';
+        }
+        badgesHtml += '<span class="spec-phase-description">Phase ' + (phaseIndex + 1) + ' of ' + phases.length + '</span>';
+        badgesHtml += '</div>';
+
+        // Build action buttons: Save | Save & Continue (or Save & Finish) | Cancel
+        var actionsHtml = '<div class="spec-phase-actions">';
+        actionsHtml += '<button class="spec-save-only-btn" id="spec-save-only-btn">💾 Save</button>';
+        if (isLastPhase) {
+            actionsHtml += '<button class="spec-accept-btn" id="spec-accept-btn">✅ Save &amp; Finish</button>';
+        } else {
+            actionsHtml += '<button class="spec-accept-btn" id="spec-accept-btn">✅ Save &amp; Continue →</button>';
+        }
+        actionsHtml += '<button class="spec-cancel-btn" id="spec-cancel-btn">✕ Cancel</button>';
+        actionsHtml += '</div>';
+
+        specPhaseBar.innerHTML = badgesHtml + actionsHtml;
+
+        // Wire up button events
+        var saveOnlyBtn = document.getElementById('spec-save-only-btn');
+        var acceptBtn = document.getElementById('spec-accept-btn');
+        var cancelBtn = document.getElementById('spec-cancel-btn');
+
+        if (saveOnlyBtn) {
+            saveOnlyBtn.addEventListener('click', function () {
+                vscode.postMessage({ type: 'specSave' });
+            });
+        }
+        if (acceptBtn) {
+            acceptBtn.addEventListener('click', function () {
+                vscode.postMessage({ type: 'specAccept' });
+            });
+        }
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function () {
+                vscode.postMessage({ type: 'specCancel' });
+            });
+        }
     }
 
     /**
@@ -288,6 +386,49 @@
         messagesEl.innerHTML = '';
         currentAssistantMsg = null;
         streamBuffer = '';
+    }
+
+    /**
+     * Updates the context usage indicator SVG ring and tooltip.
+     * Color-coded: green (<50%), yellow (50-80%), red (>80%).
+     * @param {{ conversation: number, mcpTools: number, steeringFiles: number, total: number }} usage
+     */
+    function handleContextUsage(usage) {
+        if (!contextRing || !contextUsageEl) {
+            return;
+        }
+
+        var total = usage.total || 0;
+        var circumference = 2 * Math.PI * 7; // r=7, circumference ≈ 43.98
+
+        // Calculate stroke-dasharray for the filled portion
+        var filled = (total / 100) * circumference;
+        var remaining = circumference - filled;
+        contextRing.setAttribute('stroke-dasharray', filled + ' ' + remaining);
+
+        // Color based on usage level
+        var color;
+        if (total < 50) {
+            color = '#73c991'; // green
+        } else if (total < 80) {
+            color = '#cca700'; // yellow
+        } else {
+            color = '#f48771'; // red
+        }
+        contextRing.setAttribute('stroke', color);
+
+        // Update tooltip text
+        contextUsageEl.title = 'Context usage: ' + Math.round(total) + '%';
+
+        var ctxConversation = document.getElementById('ctx-conversation');
+        var ctxMcp = document.getElementById('ctx-mcp');
+        var ctxSteering = document.getElementById('ctx-steering');
+        var ctxTotal = document.getElementById('ctx-total');
+
+        if (ctxConversation) { ctxConversation.textContent = Math.round(usage.conversation || 0); }
+        if (ctxMcp) { ctxMcp.textContent = Math.round(usage.mcpTools || 0); }
+        if (ctxSteering) { ctxSteering.textContent = Math.round(usage.steeringFiles || 0); }
+        if (ctxTotal) { ctxTotal.textContent = Math.round(total); }
     }
 
     // ---- Model Selector ----

@@ -23,6 +23,12 @@ export class CliManager implements vscode.Disposable {
     private _resolvedCliPath: string | null = null;
     private _process: CliProcess | null = null;
     private readonly _options: CliManagerOptions;
+    private _isReconnecting = false;
+
+    /** Callback to post system messages during reconnect. */
+    private _onSystemMessage: ((message: string) => void) | null = null;
+    /** Callback to post error messages during reconnect. */
+    private _onErrorMessage: ((message: string) => void) | null = null;
 
     private readonly _onDidChangeState = new vscode.EventEmitter<CliState>();
     public readonly onDidChangeState: vscode.Event<CliState> = this._onDidChangeState.event;
@@ -39,6 +45,17 @@ export class CliManager implements vscode.Disposable {
     /** Returns the resolved CLI path, or null if not yet resolved. */
     get resolvedCliPath(): string | null {
         return this._resolvedCliPath;
+    }
+
+    /**
+     * Sets callbacks for system/error messages during auto-reconnect.
+     */
+    setMessageCallbacks(
+        onSystem: (message: string) => void,
+        onError: (message: string) => void
+    ): void {
+        this._onSystemMessage = onSystem;
+        this._onErrorMessage = onError;
     }
 
     /**
@@ -183,10 +200,16 @@ export class CliManager implements vscode.Disposable {
         this._process = cliProcess;
 
         // Listen for unexpected exits (Requirement 3.3)
-        cliProcess.onDidExit(() => {
+        cliProcess.onDidExit((exitInfo) => {
             if (this._process === cliProcess) {
                 this._process = null;
                 this._setState({ status: 'ready', cliPath: cliPath! });
+
+                // Attempt auto-reconnect on unexpected exits
+                const wasUnexpected = exitInfo.code !== 0 && exitInfo.code !== null;
+                if (wasUnexpected && !this._isReconnecting) {
+                    this._attemptAutoReconnect();
+                }
             }
         });
 
@@ -246,6 +269,42 @@ export class CliManager implements vscode.Disposable {
         }
 
         this._onDidChangeState.dispose();
+    }
+
+    /**
+     * Attempts to auto-reconnect with exponential backoff after an unexpected exit.
+     * Makes 3 attempts with delays of 2s, 4s, 8s.
+     */
+    private async _attemptAutoReconnect(): Promise<void> {
+        const MAX_ATTEMPTS = 3;
+        const BASE_DELAY_MS = 2000;
+        this._isReconnecting = true;
+
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1); // 2s, 4s, 8s
+
+            this._onSystemMessage?.(
+                `CLI process exited unexpectedly. Reconnect attempt ${attempt}/${MAX_ATTEMPTS} in ${delay / 1000}s...`
+            );
+
+            await new Promise<void>((resolve) => setTimeout(resolve, delay));
+
+            try {
+                await this.ensureProcess();
+                this._onSystemMessage?.('CLI reconnected successfully.');
+                this._isReconnecting = false;
+                return;
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : 'Unknown error';
+                this._onSystemMessage?.(`Reconnect attempt ${attempt} failed: ${msg}`);
+            }
+        }
+
+        // All attempts failed
+        this._isReconnecting = false;
+        this._onErrorMessage?.(
+            'Failed to reconnect after 3 attempts. Use "Kiro: Restart CLI" from the Command Palette to reconnect manually.'
+        );
     }
 
     /**

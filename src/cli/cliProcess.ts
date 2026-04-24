@@ -30,6 +30,7 @@ export class CliProcess implements vscode.Disposable {
     private _stdoutBuffer: string = '';
     private _sessionId: string | null = null;
     private _onSessionUpdate: ((update: Record<string, unknown>) => void) | null = null;
+    private _onMetadata: ((metadata: Record<string, unknown>) => void) | null = null;
     private _requestCounter = 0;
     private _configOptions: ConfigOption[] = [];
 
@@ -84,6 +85,14 @@ export class CliProcess implements vscode.Disposable {
     /** Config options received from the agent (e.g., model selector). */
     get configOptions(): ConfigOption[] {
         return this._configOptions;
+    }
+
+    /**
+     * Sets a callback for `_kiro.dev/metadata` notifications.
+     * Used to receive context usage percentage and other metadata.
+     */
+    set onMetadata(handler: ((metadata: Record<string, unknown>) => void) | null) {
+        this._onMetadata = handler;
     }
 
     /**
@@ -280,6 +289,8 @@ export class CliProcess implements vscode.Disposable {
             this._pendingRequests.set(id, { resolve, reject });
             this._writeToStdin(message);
         });
+
+
     }
 
     private _writeToStdin(message: Record<string, unknown>): void {
@@ -351,6 +362,12 @@ export class CliProcess implements vscode.Disposable {
                     this._onSessionUpdate(update);
                 } else {
                     _log.appendLine(`[ACP] session/update but no handler or no params.update`);
+                }
+            } else if (method === '_kiro.dev/metadata') {
+                const params = parsed.params as Record<string, unknown> | undefined;
+                _log.appendLine(`[ACP] _kiro.dev/metadata notification received`);
+                if (params && this._onMetadata) {
+                    this._onMetadata(params);
                 }
             } else {
                 _log.appendLine(`[ACP] notification: ${method}`);

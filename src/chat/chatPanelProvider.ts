@@ -13,7 +13,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { CliManager } from '../cli/cliManager';
 import { WorkspaceContextProvider } from '../context/workspaceContextProvider';
-import type { ExtToWebviewMessage, WebviewToExtMessage } from '../types';
+import type { ExtToWebviewMessage, WebviewToExtMessage, ContextUsage } from '../types';
 
 const VIEW_TYPE = 'kiro.chatPanel';
 const _log = vscode.window.createOutputChannel('Kiro Chat');
@@ -22,6 +22,21 @@ export class ChatPanelProvider implements vscode.Disposable {
     private _panel: vscode.WebviewPanel | undefined;
     private _lastFailedMessage: string | null = null;
     private readonly _disposables: vscode.Disposable[] = [];
+
+    /** Current context usage data. */
+    private _contextUsage: ContextUsage = { conversation: 0, mcpTools: 0, steeringFiles: 0, total: 0 };
+
+    /** Callback for spec phase content capture. */
+    private _specContentCapture: ((content: string) => void) | null = null;
+
+    /** Callback for spec accept action. */
+    private _onSpecAccept: (() => void) | null = null;
+
+    /** Callback for spec save-only action. */
+    private _onSpecSave: (() => void) | null = null;
+
+    /** Callback for spec cancel action. */
+    private _onSpecCancel: (() => void) | null = null;
 
     /**
      * Tracks the last known text editor so we can capture context even when
@@ -45,6 +60,27 @@ export class ChatPanelProvider implements vscode.Disposable {
                 }
             })
         );
+
+        // Wire up CLI manager message callbacks for auto-reconnect
+        this._cliManager.setMessageCallbacks(
+            (message) => this.postMessage({ type: 'systemMessage', message }),
+            (message) => this.postMessage({ type: 'error', message })
+        );
+    }
+
+    /**
+     * Sets callbacks for spec workflow integration.
+     */
+    setSpecCallbacks(
+        onContentCapture: (content: string) => void,
+        onAccept: () => void,
+        onSave: () => void,
+        onCancel: () => void
+    ): void {
+        this._specContentCapture = onContentCapture;
+        this._onSpecAccept = onAccept;
+        this._onSpecSave = onSave;
+        this._onSpecCancel = onCancel;
     }
 
     /**
@@ -120,32 +156,24 @@ export class ChatPanelProvider implements vscode.Disposable {
     }
 
     /**
-     * Sends a user message through the CLI and streams the response to the Webview.
+     * Sends a prompt through the CLI and streams the response to the Webview.
+     * This is the core send method used by both regular messages and spec prompts.
      *
-     * Prepends active file path and selected text (or file content) as context,
-     * gathers workspace context, constructs an ACP request, sends it as a
-     * streaming request, and forwards each chunk to the Webview. Sends loading
-     * state messages at the start and end of the request lifecycle.
-     *
-     * On communication/process errors, stores the message for retry and shows
-     * a VS Code error notification with "Retry" and optionally "Restart CLI" actions.
-     *
-     * Requirements: 4.3, 4.5, 4.6, 11.1–11.4, 13.1
+     * @param promptText The text to send (already enriched or raw)
+     * @param isSpecPrompt If true, captures content for spec workflow
      */
-    async handleUserMessage(text: string): Promise<void> {
-        if (!this._panel) {
-            return;
-        }
-
-        // Build context prefix from active editor and selection
-        const enrichedText = this._buildContextEnrichedPrompt(text);
-
+    private async _sendPromptInternal(promptText: string, isSpecPrompt: boolean = false): Promise<void> {
         // Send loading start
         this._postMessage({ type: 'loading', active: true });
 
         try {
             const cliProcess = await this._cliManager.ensureProcess();
-            _log.appendLine(`[Chat] Sending prompt: "${enrichedText.substring(0, 120)}"`);
+            _log.appendLine(`[Chat] Sending prompt: "${promptText.substring(0, 120)}"`);
+
+            // Wire up metadata handler for context usage
+            cliProcess.onMetadata = (metadata) => {
+                this._handleMetadataNotification(metadata);
+            };
 
             // Send config options to webview if available (Requirement 12.1)
             if (cliProcess.configOptions.length > 0) {
@@ -153,7 +181,7 @@ export class ChatPanelProvider implements vscode.Disposable {
             }
 
             // Use the ACP session/prompt flow with session/update notifications
-            await cliProcess.sendPrompt(enrichedText, (update) => {
+            await cliProcess.sendPrompt(promptText, (update) => {
                 const sessionUpdate = update.sessionUpdate as string;
                 _log.appendLine(`[Chat] Got update: ${sessionUpdate}`);
 
@@ -162,6 +190,11 @@ export class ChatPanelProvider implements vscode.Disposable {
                     if (content?.text) {
                         _log.appendLine(`[Chat] Chunk: "${content.text.substring(0, 50)}"`);
                         this._postMessage({ type: 'response', content: content.text, done: false });
+
+                        // Capture content for spec workflow if active
+                        if (isSpecPrompt) {
+                            this._specContentCapture?.(content.text);
+                        }
                     }
                 } else if (sessionUpdate === 'tool_call' || sessionUpdate === 'tool_call_update') {
                     const title = update.title as string | undefined;
@@ -172,13 +205,13 @@ export class ChatPanelProvider implements vscode.Disposable {
                         this._postMessage({ type: 'toolStatus', title, status: status || '', kind: kind || '' });
                     }
                 } else if (sessionUpdate === 'config_options_update') {
-                    // Agent changed config options (e.g., model fallback) — Requirement 12.4
                     this._parseAndSendConfigOptions(update);
+                } else if (sessionUpdate === 'context_usage') {
+                    this._handleContextUsageUpdate(update);
                 }
             });
 
             _log.appendLine(`[Chat] Prompt completed`);
-            // Prompt turn completed — send done
             this._postMessage({ type: 'response', content: '', done: true });
             this._lastFailedMessage = null;
 
@@ -188,7 +221,6 @@ export class ChatPanelProvider implements vscode.Disposable {
             const rawMessage = err instanceof Error ? err.message : 'An unknown error occurred';
             _log.appendLine(`[Chat] Error: ${rawMessage}`);
 
-            // Detect session/auth/process failures and show a friendly message (Requirement 11.4)
             const isSessionError =
                 rawMessage.includes('terminated unexpectedly') ||
                 rawMessage.includes('not authenticated') ||
@@ -201,23 +233,59 @@ export class ChatPanelProvider implements vscode.Disposable {
                 : rawMessage;
 
             this._postMessage({ type: 'error', message: displayMessage });
-            this._lastFailedMessage = text;
+            this._lastFailedMessage = promptText;
 
-            // Show VS Code error notification with Retry and optionally Restart CLI actions
             const actions = isSessionError ? ['Retry', 'Restart CLI'] : ['Retry'];
             const action = await vscode.window.showErrorMessage(
                 `Communication error: ${displayMessage}`,
                 ...actions
             );
             if (action === 'Retry') {
-                this.handleUserMessage(text);
+                this._sendPromptInternal(promptText, isSpecPrompt);
             } else if (action === 'Restart CLI') {
                 vscode.commands.executeCommand('kiro.restartCli');
             }
         } finally {
-            // Send loading end
             this._postMessage({ type: 'loading', active: false });
         }
+    }
+
+    /**
+     * Sends a user message through the CLI and streams the response to the Webview.
+     * Prepends active file context before sending.
+     */
+    async handleUserMessage(text: string): Promise<void> {
+        if (!this._panel) {
+            return;
+        }
+        const enrichedText = this._buildContextEnrichedPrompt(text);
+        await this._sendPromptInternal(enrichedText, false);
+    }
+
+    /**
+     * Sends a spec workflow prompt through the CLI WITHOUT prepending editor context.
+     * Shows a system message instead of the full prompt as a user bubble.
+     * Captures streaming content for the spec manager.
+     * Ensures the panel is open and ready before sending.
+     */
+    async handleSpecPrompt(prompt: string, phaseLabel: string): Promise<void> {
+        // Ensure panel is open
+        this.openPanel();
+
+        // Wait for panel to be ready
+        let retries = 10;
+        while (!this._panel && retries > 0) {
+            await new Promise<void>((r) => setTimeout(r, 100));
+            retries--;
+        }
+
+        if (!this._panel) {
+            vscode.window.showErrorMessage('Failed to open Kiro Chat panel.');
+            return;
+        }
+
+        this._postMessage({ type: 'systemMessage', message: `Generating ${phaseLabel}...` });
+        await this._sendPromptInternal(prompt, true);
     }
 
     /**
@@ -295,11 +363,56 @@ export class ChatPanelProvider implements vscode.Disposable {
                 // Handle model selection from the webview (Requirement 12.2)
                 this._handleModelSelection(message.configId, message.value);
                 break;
+            case 'specAccept':
+                this._onSpecAccept?.();
+                break;
+            case 'specSave':
+                this._onSpecSave?.();
+                break;
+            case 'specCancel':
+                this._onSpecCancel?.();
+                break;
+            case 'startSpec':
+                vscode.commands.executeCommand('kiro.startSpec');
+                break;
+            case 'clearChat':
+                // Forward clearChat back to webview to clear the UI
+                this._postMessage({ type: 'clearChat' });
+                break;
             case 'selectFiles':
             case 'advanceSpec':
                 // Handled by other components (SpecWorkflowManager)
                 break;
         }
+    }
+
+    /**
+     * Handles `_kiro.dev/metadata` notifications from the CLI.
+     * Parses contextUsagePercentage and sends it to the webview.
+     */
+    private _handleMetadataNotification(metadata: Record<string, unknown>): void {
+        const contextUsagePercentage = metadata.contextUsagePercentage as number | undefined;
+        if (contextUsagePercentage !== undefined) {
+            _log.appendLine(`[Chat] Metadata: contextUsagePercentage=${contextUsagePercentage}`);
+            this._contextUsage = {
+                ...this._contextUsage,
+                total: contextUsagePercentage,
+            };
+            this._postMessage({ type: 'contextUsage', usage: this._contextUsage });
+        }
+    }
+
+    /**
+     * Handles context_usage data from session/update notifications.
+     */
+    private _handleContextUsageUpdate(update: Record<string, unknown>): void {
+        const conversation = (update.conversation as number) ?? this._contextUsage.conversation;
+        const mcpTools = (update.mcpTools as number) ?? this._contextUsage.mcpTools;
+        const steeringFiles = (update.steeringFiles as number) ?? this._contextUsage.steeringFiles;
+        const total = (update.total as number) ?? this._contextUsage.total;
+
+        this._contextUsage = { conversation, mcpTools, steeringFiles, total };
+        this._postMessage({ type: 'contextUsage', usage: this._contextUsage });
     }
 
     /**
