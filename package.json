@@ -1,8 +1,8 @@
 {
     "name": "kiro-vscode-extension",
     "displayName": "Kiro",
-    "description": "AI-powered development assistant — chat with Kiro agents, run Spec workflows, and get context-aware coding help directly in VS Code.",
-    "version": "0.1.1",
+    "description": "VS Code UI wrapper for the Kiro CLI — chat with AI agents, run Spec workflows, and get context-aware coding help. Requires Kiro CLI (kiro-cli) installed separately from kiro.dev.",
+    "version": "0.1.2",
     "publisher": "AsadBinImtiaz",
     "author": "Asad Bin Imtiaz",
     "license": "MIT",

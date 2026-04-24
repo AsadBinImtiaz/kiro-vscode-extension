@@ -2,6 +2,13 @@
 
 All notable changes to the Kiro VS Code Extension will be documented in this file.
 
+## [0.1.2] — 2025-04-24
+
+### Changed
+
+- Updated extension description to clarify it's a UI wrapper for the Kiro CLI
+- Rewrote README with prominent prerequisites section, install steps, and troubleshooting guide
+
 ## [0.1.1] — 2025-04-24
 
 ### Fixed
