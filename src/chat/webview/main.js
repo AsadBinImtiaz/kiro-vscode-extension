@@ -34,19 +34,11 @@
     /** @type {boolean} Guard to prevent model selector change events during programmatic updates */
     let updatingModelSelector = false;
 
-    // ---- Default Models (Requirement 12.5) ----
+    // Placeholder until session/new returns models.availableModels.
+    // The old hardcoded catalog stopped at Opus 4.6 and used ids the CLI rejects
+    // (claude-opus4.6 instead of claude-opus-4.6).
     var defaultModels = [
-        { name: 'Auto', value: 'auto' },
-        { name: 'Claude Opus 4.6', value: 'claude-opus4.6' },
-        { name: 'Claude Opus 4.5', value: 'claude-opus4.5' },
-        { name: 'Claude Sonnet 4.6', value: 'claude-sonnet4.6' },
-        { name: 'Claude Sonnet 4.5', value: 'claude-sonnet4.5' },
-        { name: 'Claude Sonnet 4.0', value: 'claude-sonnet4.0' },
-        { name: 'Claude Haiku 4.5', value: 'claude-haiku4.5' },
-        { name: 'MiniMax 2.5', value: 'minimax-2.5' },
-        { name: 'DeepSeek 3.2', value: 'deepseek-3.2' },
-        { name: 'MiniMax 2.1', value: 'minimax-2.1' },
-        { name: 'Qwen3 Coder Next', value: 'qwen3-coder-next' }
+        { name: 'Auto', value: 'auto' }
     ];
 
     // Initialize model selector with defaults
@@ -441,7 +433,7 @@
         updatingModelSelector = true;
         modelSelector.innerHTML = '';
         modelValueMap = {};
-        modelConfigId = 'chat.model';
+        modelConfigId = 'model';
 
         for (var i = 0; i < defaultModels.length; i++) {
             var m = defaultModels[i];
@@ -461,7 +453,7 @@
             return;
         }
         var value = modelSelector.value;
-        var configId = modelConfigId || 'chat.model';
+        var configId = modelConfigId || 'model';
         vscode.postMessage({ type: 'selectModel', configId: configId, value: value });
     });
 
@@ -734,4 +726,6 @@
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#x27;');
     }
+
+    vscode.postMessage({ type: 'ready' });
 })();

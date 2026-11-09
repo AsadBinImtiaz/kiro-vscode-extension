@@ -135,8 +135,16 @@ export class CliProcess implements vscode.Disposable {
 
         _log.appendLine(`[ACP] Session created: ${this._sessionId}`);
 
-        // Parse configOptions if present (model selector, etc.)
+        // V3 advertises the picker in configOptions. CLI 2.x puts the live
+        // catalog on result.models and does not send configOptions at all.
         this._configOptions = this._parseConfigOptions(result);
+        if (!this._configOptions.some((option) => option.category === 'model')) {
+            const fromModels = this._parseModelsAsConfigOption(result);
+            if (fromModels) {
+                _log.appendLine(`[ACP] Model catalog from session.models: ${fromModels.options.length}`);
+                this._configOptions = [...this._configOptions, fromModels];
+            }
+        }
 
         return this._sessionId;
     }
@@ -152,19 +160,33 @@ export class CliProcess implements vscode.Disposable {
             throw new Error('No active session. Call initializeAndCreateSession first.');
         }
 
-        const response = await this._sendRaw({
-            jsonrpc: '2.0',
-            id: this._nextId(),
-            method: 'session/set_config_option',
-            params: {
-                sessionId: this._sessionId,
-                configId,
-                value,
-            },
-        });
+        let response: AcpResponse;
+        try {
+            response = await this._sendRaw({
+                jsonrpc: '2.0',
+                id: this._nextId(),
+                method: 'session/set_config_option',
+                params: {
+                    sessionId: this._sessionId,
+                    configId,
+                    value,
+                },
+            });
+        } catch (err) {
+            // CLI 2.x ACP has no session/set_config_option. The model switch is session/set_model.
+            const message = err instanceof Error ? err.message : String(err);
+            if (configId === 'model' && /method not found/i.test(message)) {
+                return this._setModel(value);
+            }
+            throw err;
+        }
 
         if (response.error) {
-            throw new Error(`set_config_option failed: ${(response.error as { message?: string }).message}`);
+            const errBody = response.error as { message?: string; code?: number };
+            if (configId === 'model' && (errBody.code === -32601 || /method not found/i.test(errBody.message ?? ''))) {
+                return this._setModel(value);
+            }
+            throw new Error(`set_config_option failed: ${errBody.message}`);
         }
 
         const result = response.result as Record<string, unknown> | undefined;
@@ -173,6 +195,66 @@ export class CliProcess implements vscode.Disposable {
             this._configOptions = updated;
         }
         return this._configOptions;
+    }
+
+    /**
+     * Switches the session model on CLI 2.x, which only implements session/set_model.
+     */
+    private async _setModel(modelId: string): Promise<ConfigOption[]> {
+        const response = await this._sendRaw({
+            jsonrpc: '2.0',
+            id: this._nextId(),
+            method: 'session/set_model',
+            params: {
+                sessionId: this._sessionId,
+                modelId,
+            },
+        });
+
+        if (response.error) {
+            throw new Error(`set_model failed: ${(response.error as { message?: string }).message}`);
+        }
+
+        this._configOptions = this._configOptions.map((option) =>
+            option.category === 'model' ? { ...option, currentValue: modelId } : option
+        );
+        return this._configOptions;
+    }
+
+    /**
+     * Builds a model picker entry from the CLI 2.x `models` block on session/new.
+     */
+    private _parseModelsAsConfigOption(result: Record<string, unknown> | undefined): ConfigOption | null {
+        const models = result?.models as Record<string, unknown> | undefined;
+        const available = models?.availableModels;
+        if (!models || !Array.isArray(available) || available.length === 0) {
+            return null;
+        }
+
+        const options = available.flatMap((entry) => {
+            const row = entry as Record<string, unknown>;
+            const value = (row.modelId as string) || (row.value as string) || '';
+            if (!value) {
+                return [];
+            }
+            return [{
+                value,
+                name: (row.name as string) || value,
+                description: (row.description as string) || '',
+            }];
+        });
+        if (options.length === 0) {
+            return null;
+        }
+
+        return {
+            id: 'model',
+            name: 'Model',
+            description: '',
+            category: 'model',
+            currentValue: (models.currentModelId as string) || options[0].value,
+            options,
+        };
     }
 
     /**

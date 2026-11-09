@@ -132,7 +132,8 @@ export type WebviewToExtMessage =
     | { type: 'specSave' }
     | { type: 'specCancel' }
     | { type: 'startSpec' }
-    | { type: 'clearChat' };
+    | { type: 'clearChat' }
+    | { type: 'ready' };
 
 // ---------------------------------------------------------------------------
 // Config Option Types (Requirement 12)

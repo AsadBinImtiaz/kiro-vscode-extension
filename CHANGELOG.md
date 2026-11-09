@@ -2,6 +2,13 @@
 
 All notable changes to the Kiro VS Code Extension will be documented in this file.
 
+## [0.1.4] — 2026-11-09
+
+### Fixed
+
+- Model picker reads the live catalog from `session/new` `models.availableModels`. The old dropdown was a hardcoded list that stopped at Claude Opus 4.6 and used model ids the CLI does not accept.
+- Selecting a model uses `session/set_model` on CLI 2.x, which has no `session/set_config_option`.
+
 ## [0.1.3] — 2025-04-24
 
 ### Added
