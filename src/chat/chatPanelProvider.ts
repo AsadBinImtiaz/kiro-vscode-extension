@@ -379,6 +379,9 @@ export class ChatPanelProvider implements vscode.Disposable {
                 // Forward clearChat back to webview to clear the UI
                 this._postMessage({ type: 'clearChat' });
                 break;
+            case 'ready':
+                void this._publishModelList();
+                break;
             case 'selectFiles':
             case 'advanceSpec':
                 // Handled by other components (SpecWorkflowManager)
@@ -413,6 +416,22 @@ export class ChatPanelProvider implements vscode.Disposable {
 
         this._contextUsage = { conversation, mcpTools, steeringFiles, total };
         this._postMessage({ type: 'contextUsage', usage: this._contextUsage });
+    }
+
+    /**
+     * Loads the live model catalog as soon as the chat panel is ready.
+     * The placeholder list in the webview is not the account catalog.
+     */
+    private async _publishModelList(): Promise<void> {
+        try {
+            const cliProcess = await this._cliManager.ensureProcess();
+            if (cliProcess.configOptions.length > 0) {
+                this._postMessage({ type: 'configOptions', options: cliProcess.configOptions });
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            _log.appendLine(`[Chat] Model list unavailable: ${message}`);
+        }
     }
 
     /**
