@@ -102,6 +102,14 @@ Run `Kiro: Login` from the Command Palette, or run `kiro-cli login` in your term
 **Chat panel doesn't show editor context**
 Make sure you have a file open in the editor before opening the chat panel. The extension captures the last active text editor and includes it with your prompts.
 
+## Building a VSIX
+
+`npm run package` only runs the webpack production build. It does not create an installable package. To build the `.vsix`:
+
+```bash
+npx @vscode/vsce package
+```
+
 ## License
 
 [MIT](LICENSE.md)
